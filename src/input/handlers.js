@@ -24,7 +24,8 @@ export function attachInput(){
 }
 
 let dragState = { active:false, startX:0, startY:0, camX:0, camY:0, button:0 };
-let touchState = { tracking:false, moved:false, startX:0, startY:0, camX:0, camY:0, lastTapTime:0, longPress:false, longPressTimer:null };
+let touchState = { tracking:false, moved:false, startX:0, startY:0, lastX:0, lastY:0, camX:0, camY:0, lastTapTime:0, longPress:false, longPressTimer:null };
+const TAP_MOVE_TOLERANCE = 14; // px tolerance for distinguishing tap vs pan
 
 function isPanningTrigger(evt){
   return evt.button === 1 || evt.button === 2 || (evt.button === 0 && (evt.metaKey || evt.ctrlKey || evt.shiftKey || evt.altKey));
@@ -50,18 +51,21 @@ function onTouchStart(e){
   if (e.touches.length !== 1) return; // ignore multi-touch (future zoom)
   const t = e.touches[0];
   touchState.tracking = true; touchState.moved = false; touchState.longPress=false;
-  touchState.startX = t.clientX; touchState.startY = t.clientY;
+  touchState.startX = t.clientX; touchState.startY = t.clientY; touchState.lastX = t.clientX; touchState.lastY = t.clientY;
   touchState.camX = state.camera.x; touchState.camY = state.camera.y;
   // Long press to enter panning mode explicitly
   clearTimeout(touchState.longPressTimer);
   touchState.longPressTimer = setTimeout(()=>{ touchState.longPress = true; }, 400);
+  // Prevent synthetic mouse events so we only rely on touch logic
+  e.preventDefault();
 }
 function onTouchMove(e){
   if (!touchState.tracking) return;
   const t = e.touches[0];
+  touchState.lastX = t.clientX; touchState.lastY = t.clientY;
   const dx = t.clientX - touchState.startX; const dy = t.clientY - touchState.startY;
   const dist2 = dx*dx + dy*dy;
-  if (dist2 > 9){ // 3px threshold
+  if (dist2 > TAP_MOVE_TOLERANCE*TAP_MOVE_TOLERANCE){
     touchState.moved = true;
   }
   // If moved enough or longPress activated: treat as pan
@@ -78,12 +82,14 @@ function onTouchMove(e){
 function onTouchEnd(e){
   clearTimeout(touchState.longPressTimer);
   if (!touchState.tracking) return;
-  const wasPan = (touchState.moved || touchState.longPress);
+  const dx = touchState.lastX - touchState.startX; const dy = touchState.lastY - touchState.startY;
+  const movedEnough = (dx*dx + dy*dy) > (TAP_MOVE_TOLERANCE*TAP_MOVE_TOLERANCE);
+  const wasPan = (movedEnough || touchState.longPress);
   touchState.tracking = false;
   if (!wasPan){
-    // Treat as tap -> click equivalent
+    // Treat as tap -> click equivalent using final coordinates
     const canvas = getCanvas(); const rect = canvas.getBoundingClientRect();
-    const x = touchState.startX - rect.left; const y = touchState.startY - rect.top;
+    const x = touchState.lastX - rect.left; const y = touchState.lastY - rect.top;
     simulateClick(x,y);
   }
 }
