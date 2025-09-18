@@ -22,6 +22,9 @@ function startTurn(){
   drawCards(state.currentPlayer, 3);
   document.getElementById('endTurnBtn').disabled = false;
   updateHandUI();
+  // Auto-select the first available piece for the active player
+  const first = state.pieces.find(p => p.player === state.currentPlayer);
+  if (first) state.selectedPieceId = first.id;
 }
 
 function endTurn(){
