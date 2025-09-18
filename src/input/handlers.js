@@ -74,8 +74,7 @@ function onTouchMove(e){
     e.preventDefault();
   } else {
     // Hover-like preview while finger is still (simulate onMove)
-    const canvas = getCanvas(); const rect = canvas.getBoundingClientRect();
-    const localX = t.clientX - rect.left; const localY = t.clientY - rect.top;
+    const { x: localX, y: localY } = toCanvasCoords(t.clientX, t.clientY);
     simulateHover(localX, localY);
   }
 }
@@ -88,8 +87,7 @@ function onTouchEnd(e){
   touchState.tracking = false;
   if (!wasPan){
     // Treat as tap -> click equivalent using final coordinates
-    const canvas = getCanvas(); const rect = canvas.getBoundingClientRect();
-    const x = touchState.lastX - rect.left; const y = touchState.lastY - rect.top;
+    const { x, y } = toCanvasCoords(touchState.lastX, touchState.lastY);
     simulateClick(x,y);
   }
 }
@@ -143,9 +141,7 @@ function simulateHover(x,y){
 
 function onClick(evt){
   if (state.animating) return;
-  const canvas = getCanvas();
-  const rect = canvas.getBoundingClientRect();
-  const x = evt.clientX - rect.left; const y = evt.clientY - rect.top;
+  const { x, y } = toCanvasCoords(evt.clientX, evt.clientY);
   const axial = roundAxial(pixelToAxial(x,y));
   const k = key(axial);
   if (!state.board.has(k)) return;
@@ -184,8 +180,7 @@ function onMove(evt){
   if (state.animating) return;
   if (state.selectedPieceId == null){ state.previewPath = null; return; }
   const piece = state.pieces.find(p => p.id === state.selectedPieceId); if (!piece){ state.previewPath=null; return; }
-  const canvas = getCanvas(); const rect = canvas.getBoundingClientRect();
-  const x = evt.clientX - rect.left; const y = evt.clientY - rect.top;
+  const { x, y } = toCanvasCoords(evt.clientX, evt.clientY);
   const axial = roundAxial(pixelToAxial(x,y)); const k = key(axial);
   if (!state.board.has(k)){ state.previewPath=null; return; }
   if (state.pieces.some(p=>p.pos.q===axial.q && p.pos.r===axial.r) && !(axial.q===piece.pos.q && axial.r===piece.pos.r)){ state.previewPath=null; return; }
@@ -204,7 +199,19 @@ function hintNoMoves(){
 
 function updateStatus(){
   const pdata = state.playerData[state.currentPlayer];
-  const counts = pdata ? ['grass','sand','water'].map(t=>`${t[0].toUpperCase()+t.slice(1)}:${pdata.hand.filter(c=>c===t).length}`).join(' ') : '';
+  const counts = pdata ? ['grass','sand','water'].map(t=>{
+    const n = pdata.hand.filter(c=>c.terrain===t).length;
+    return `${t[0].toUpperCase()+t.slice(1)}:${n}`;
+  }).join(' ') : '';
   const status = document.getElementById('status');
   if (status) status.textContent = `Player ${state.currentPlayer} | Cards ${counts}`;
+}
+
+// Convert viewport client coordinates into canvas internal coordinate space (handles CSS scaling)
+function toCanvasCoords(clientX, clientY){
+  const canvas = getCanvas();
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
 }
